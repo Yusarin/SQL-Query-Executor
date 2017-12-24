@@ -4,6 +4,7 @@ import numpy as np
 import operator
 import re
 import time
+import json
 pd.options.mode.chained_assignment = None  # default='warn'
 
 def parentheses(conditions,connections):
@@ -241,25 +242,12 @@ def detect_type(condition, keylist):
     return condition, keylist
 
 
-def find_index_order(index_pre, keylist_pre, shape_pre, listOfTablesInFrom):
-    index = []
-    keylist = []
-    shape = []
-    for t in listOfTablesInFrom:
-        index.append(index_pre[t])
-        keylist.append(keylist_pre[t])
-        shape.append(shape_pre[t])
-    return index, keylist, shape
+def is_float(string):
+  try:
+    return float(string) and '.' in string  # True if string is a number contains a dot
+  except ValueError:  # String is not a number
+    return False
 
-# def find_index_order(index_pre, shape_pre, index_attribute, listOfTablesInFrom):
-#     index = []
-#     indexed = []
-#     shape = []
-#     for t in listOfTablesInFrom:
-#         index.append(index_pre[t])
-#         indexed.append(index_attribute[t])
-#         shape.append(shape_pre[t])
-#     return index, indexed, shape
 #####################################################################################################
 def single_attribute_eval(condition,c, eval_attributes, shape, need_index, need_keylist):
     if 'NOT' in condition and 'LIKE' in condition:
@@ -285,6 +273,10 @@ def single_attribute_eval(condition,c, eval_attributes, shape, need_index, need_
     elif 'NOT' in condition and 'LIKE' not in condition:
         var_name = eval_attributes[c][0]
         condition, new_keylist = detect_type(condition, need_keylist)
+        if is_float(new_keylist[0]):
+            new_keylist = [float(l) for l in new_keylist]
+        elif new_keylist[0].isdigit():
+            new_keylist = [int(l) for l in new_keylist]
         vars()[var_name] = np.array(new_keylist)
         new_condition = condition.split('NOT')[1]
         key_pos = list(np.where(eval(new_condition))[0])
@@ -292,11 +284,16 @@ def single_attribute_eval(condition,c, eval_attributes, shape, need_index, need_
         for k in key_pos:
             result.extend(need_index[need_keylist[k]])
         all = range(shape)
-        not_result = np.setdiff1d(all, result)[0]
+        not_result = np.setdiff1d(all, result)
         return not_result
     else:
         var_name = eval_attributes[c][0]
         condition, new_keylist = detect_type(condition, need_keylist)
+        if is_float(new_keylist[0]):
+            new_keylist = [float(l) for l in new_keylist]
+        elif new_keylist[0].isdigit():
+            new_keylist = [int(l) for l in new_keylist]
+
         vars()[var_name] = np.array(new_keylist)
         key_pos = list(np.where(eval(condition))[0])
         result = []
@@ -679,92 +676,18 @@ def Adjust_row(pos, table1, table2):
     new_pos[table2] = list(pos[table2])*length1
     return new_pos
 
-#### UNCOMMENT FOR METHOD NOT READING CSV
-# def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_attributes, merge_on_attributes, connection):
-#     if connection == []:
-#         final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
-#         return final_R
-#     elif join:
-#         if pos[0] != []:
-#             skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
-#             final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
-#
-#         else:
-#             final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
-#         col_names = final_R.columns.values
-#         for i in range(len(need_attributes[table_name_called[0]])):
-#             need_name = need_attributes[table_name_called[0]][i]
-#             if '_table_' in need_name:
-#                 if need_name.split('_table_')[0] not in merge_on_attributes:
-#                     name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
-#                     final_R = final_R.rename(columns={col_names[name_pos]: need_name})
-#                 else:
-#                     if need_name.split('_table_')[0] != merge_on_attributes[0]:
-#                         name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
-#                         final_R = final_R.rename(columns={col_names[name_pos]: merge_on_attributes[0]})
-#             else:
-#                 name_pos = np.where(col_names == need_name)[0][0]
-#                 final_R = final_R.rename(columns={col_names[name_pos]: need_name})
-#
-#         for t in range(1,len(listOfTablesInFrom)):
-#             #if t+1 < len(listOfTablesInFrom):
-#             #    if len(pos[t]) != len(pos[t+1]):
-#             #        new_pos = Adjust_row(pos, t, t+1)
-#             if pos[t] != []:
-#                 skip_pos = list(np.setdiff1d(range(shape[t]), pos[t])+1)
-#                 R = pd.read_csv(listOfTablesInFrom[t], usecols=attr[table_name_called[t]], skiprows=skip_pos)
-#
-#             else:
-#                 R = pd.read_csv(listOfTablesInFrom[t], usecols = attr[table_name_called[t]])
-#             col_names = R.columns.values
-#             for i in range(len(need_attributes[table_name_called[t]])):
-#                 need_name = need_attributes[table_name_called[t]][i]
-#                 if '_table_' in need_name:
-#                     if need_name.split('_table_')[0] not in merge_on_attributes:
-#                         name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
-#                         R = R.rename(columns={col_names[name_pos]: need_name})
-#                     else:
-#                         if need_name.split('_table_')[0] != merge_on_attributes[0]:
-#                             name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
-#                             R = R.rename(columns={col_names[name_pos]: merge_on_attributes[0]})
-#                 else:
-#                     name_pos = np.where(col_names == need_name)[0][0]
-#                     R = R.rename(columns={col_names[name_pos]: need_name})
-#             #R = R.loc[new_pos[t]]
-#             #final_R = pd.concat([final_R.reset_index(drop= True),R.reset_index(drop = True)], axis = 1)
-#             final_R = final_R.merge(R, on = merge_on_attributes)
-#         return final_R
-#     else:
-#         ## single table
-#         skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
-#         R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
-#         #R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
-#
-#         col_names = R.columns.values
-#         for i in range(len(need_attributes[table_name_called[0]])):
-#             need_name = need_attributes[table_name_called[0]][i]
-#             if '_table_' in need_name:
-#                 name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
-#                 R = R.rename(columns={col_names[name_pos]: need_name})
-#             else:
-#                 name_pos = np.where(col_names == need_name)[0][0]
-#                 R = R.rename(columns={col_names[name_pos]: need_name})
-#         return R
-
-### THIS IS USING READ CSV FILE METHOD
-def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_attributes, merge_on_attributes, connection, in_memory):
+### UNCOMMENT FOR METHOD NOT READING CSV
+def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_attributes, merge_on_attributes, connection):
     if connection == []:
-        #final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
-        final_R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]]
+        final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
         return final_R
     elif join:
         if pos[0] != []:
-            #skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
-            #final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
-            final_R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]].loc[pos[0]]
+            skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
+            final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
         else:
-            #final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
-            final_R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]]
+            final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
+
         col_names = final_R.columns.values
         for i in range(len(need_attributes[table_name_called[0]])):
             need_name = need_attributes[table_name_called[0]][i]
@@ -785,12 +708,11 @@ def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_at
             #    if len(pos[t]) != len(pos[t+1]):
             #        new_pos = Adjust_row(pos, t, t+1)
             if pos[t] != []:
-                #skip_pos = list(np.setdiff1d(range(shape[t]), pos[t])+1)
-                #R = pd.read_csv(listOfTablesInFrom[t], usecols=attr[table_name_called[t]], skiprows=skip_pos)
-                R = in_memory[listOfTablesInFrom[t]][attr[table_name_called[t]]].loc[pos[t]]
+                skip_pos = list(np.setdiff1d(range(shape[t]), pos[t])+1)
+                R = pd.read_csv(listOfTablesInFrom[t], usecols=attr[table_name_called[t]], skiprows=skip_pos)
+
             else:
-                #R = pd.read_csv(listOfTablesInFrom[t], usecols = attr[table_name_called[t]])
-                R = in_memory[listOfTablesInFrom[t]][attr[table_name_called[t]]]
+                R = pd.read_csv(listOfTablesInFrom[t], usecols = attr[table_name_called[t]])
 
             col_names = R.columns.values
             for i in range(len(need_attributes[table_name_called[t]])):
@@ -809,14 +731,12 @@ def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_at
             #R = R.loc[new_pos[t]]
             #final_R = pd.concat([final_R.reset_index(drop= True),R.reset_index(drop = True)], axis = 1)
             final_R = final_R.merge(R, on = merge_on_attributes)
-            #final_R = final_R.merge(R)
-
         return final_R
     else:
         ## single table
-        #skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
-        #R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
-        R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]].loc[pos[0]]
+        skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
+        R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
+
         col_names = R.columns.values
         for i in range(len(need_attributes[table_name_called[0]])):
             need_name = need_attributes[table_name_called[0]][i]
@@ -827,6 +747,83 @@ def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_at
                 name_pos = np.where(col_names == need_name)[0][0]
                 R = R.rename(columns={col_names[name_pos]: need_name})
         return R
+
+# ### THIS IS USING READ CSV FILE METHOD
+# def WHERE(pos, listOfTablesInFrom, join, attr, table_name_called, shape, need_attributes, merge_on_attributes, connection, in_memory):
+#     if connection == []:
+#         #final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
+#         final_R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]]
+#         return final_R
+#     elif join:
+#         if pos[0] != []:
+#             #skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
+#             #final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
+#             final_R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]].loc[pos[0]]
+#         else:
+#             #final_R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]])
+#             final_R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]]
+#         col_names = final_R.columns.values
+#         for i in range(len(need_attributes[table_name_called[0]])):
+#             need_name = need_attributes[table_name_called[0]][i]
+#             if '_table_' in need_name:
+#                 if need_name.split('_table_')[0] not in merge_on_attributes:
+#                     name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
+#                     final_R = final_R.rename(columns={col_names[name_pos]: need_name})
+#                 else:
+#                     if need_name.split('_table_')[0] != merge_on_attributes[0]:
+#                         name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
+#                         final_R = final_R.rename(columns={col_names[name_pos]: merge_on_attributes[0]})
+#             else:
+#                 name_pos = np.where(col_names == need_name)[0][0]
+#                 final_R = final_R.rename(columns={col_names[name_pos]: need_name})
+#
+#         for t in range(1,len(listOfTablesInFrom)):
+#             #if t+1 < len(listOfTablesInFrom):
+#             #    if len(pos[t]) != len(pos[t+1]):
+#             #        new_pos = Adjust_row(pos, t, t+1)
+#             if pos[t] != []:
+#                 #skip_pos = list(np.setdiff1d(range(shape[t]), pos[t])+1)
+#                 #R = pd.read_csv(listOfTablesInFrom[t], usecols=attr[table_name_called[t]], skiprows=skip_pos)
+#                 R = in_memory[listOfTablesInFrom[t]][attr[table_name_called[t]]].loc[pos[t]]
+#             else:
+#                 #R = pd.read_csv(listOfTablesInFrom[t], usecols = attr[table_name_called[t]])
+#                 R = in_memory[listOfTablesInFrom[t]][attr[table_name_called[t]]]
+#
+#             col_names = R.columns.values
+#             for i in range(len(need_attributes[table_name_called[t]])):
+#                 need_name = need_attributes[table_name_called[t]][i]
+#                 if '_table_' in need_name:
+#                     if need_name.split('_table_')[0] not in merge_on_attributes:
+#                         name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
+#                         R = R.rename(columns={col_names[name_pos]: need_name})
+#                     else:
+#                         if need_name.split('_table_')[0] != merge_on_attributes[0]:
+#                             name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
+#                             R = R.rename(columns={col_names[name_pos]: merge_on_attributes[0]})
+#                 else:
+#                     name_pos = np.where(col_names == need_name)[0][0]
+#                     R = R.rename(columns={col_names[name_pos]: need_name})
+#             #R = R.loc[new_pos[t]]
+#             #final_R = pd.concat([final_R.reset_index(drop= True),R.reset_index(drop = True)], axis = 1)
+#             final_R = final_R.merge(R, on = merge_on_attributes)
+#             #final_R = final_R.merge(R)
+#
+#         return final_R
+#     else:
+#         ## single table
+#         #skip_pos = list(np.setdiff1d(range(shape[0]), pos[0])+1)
+#         #R = pd.read_csv(listOfTablesInFrom[0], usecols=attr[table_name_called[0]], skiprows=skip_pos)
+#         R = in_memory[listOfTablesInFrom[0]][attr[table_name_called[0]]].loc[pos[0]]
+#         col_names = R.columns.values
+#         for i in range(len(need_attributes[table_name_called[0]])):
+#             need_name = need_attributes[table_name_called[0]][i]
+#             if '_table_' in need_name:
+#                 name_pos = np.where(col_names == need_name.split('_table_')[0])[0][0]
+#                 R = R.rename(columns={col_names[name_pos]: need_name})
+#             else:
+#                 name_pos = np.where(col_names == need_name)[0][0]
+#                 R = R.rename(columns={col_names[name_pos]: need_name})
+#         return R
 
 ##############################################################################################################################
 def SELECT(attributes, selection_rename, final_R, join, merge_on_attributes, distinct):
@@ -873,74 +870,20 @@ def SELECT(attributes, selection_rename, final_R, join, merge_on_attributes, dis
             return final_R[attributes]
 
 
-####################################################################################################################################################################################################################
-#################################################################################################################################################
-## PREPROCESSING
-def is_float(string):
-  try:
-    return float(string) and '.' in string  # True if string is a number contains a dot
-  except ValueError:  # String is not a number
-    return False
+def find_index_order(listOfTablesInFrom, attr, table_name_called, merge_on_attributes, eval_attributes):
+    index = {}
+    keylist = {}
+    shape = {}
+    eval_need = [j.split('_table_')[0] for i in range(len(eval_attributes.keys())) for j in eval_attributes[i]]
 
-def Pre_process(csv_file):
-    header = list(pd.read_csv(csv_file, nrows = 1).columns.values)
-    index = dict.fromkeys(header)
-    keylist = dict.fromkeys(header)
-    with open(csv_file, 'r') as fin:
-        reader = csv.DictReader(fin)
-        for col in header:
-            index[col] = dict()
-            keylist[col] = []
-        for i,line in enumerate(reader):
-            for col in header:
-                if is_float(line[col]):
-                    new_key = float(line[col])
-                elif line[col].isdigit():
-                    new_key = int(line[col])
-                else:
-                    new_key = line[col]
-
-                if new_key not in index[col].keys():
-                    index[col][new_key] = [i]
-                else:
-                    index[col][new_key].append(i)
-
-        shape = i+1
-    for col in header:
-        keylist[col] = list(index[col].keys())
-
-    file = pd.read_csv(csv_file)
-    return index, keylist, shape, file
-
-def Pre_process_disk(csv_file):
-    header = list(pd.read_csv(csv_file, nrows = 1).columns.values)
-    index = dict.fromkeys(header)
-    keylist = dict.fromkeys(header)
-    with open(csv_file, 'r') as fin:
-        reader = csv.DictReader(fin)
-        for col in header:
-            index[col] = dict()
-            keylist[col] = []
-        for i,line in enumerate(reader):
-            for col in header:
-                if is_float(line[col]):
-                    new_key = float(line[col])
-                elif line[col].isdigit():
-                    new_key = int(line[col])
-                else:
-                    new_key = line[col]
-
-                if new_key not in index[col].keys():
-                    index[col][new_key] = [i]
-                else:
-                    index[col][new_key].append(i)
-
-        shape = i+1
-    for col in header:
-        keylist[col] = list(index[col].keys())
-
+    for t in range(len(listOfTablesInFrom)):
+        csv_file = listOfTablesInFrom[t]
+        index[t] = {}
+        keylist[t] = {}
+        for wanted in attr[table_name_called[t]]:
+            if wanted not in merge_on_attributes and wanted in eval_need:
+                indexing = json.load(open(csv_file+'_'+wanted+'_indexing.json'))
+                index[t][wanted] = indexing
+                keylist[t][wanted] = list(indexing.keys())
+        shape[t] = json.load(open(csv_file+'_shape.json'))['0']
     return index, keylist, shape
-
-####################################################################################################################################################################################################################
-####################################################################################################################################################################################################################
-##########################################################################################
